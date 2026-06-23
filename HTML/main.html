@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Painel de Status da Equipe</title>
+<style>
+  :root{
+    --bg:#f4f5f7;
+    --card:#ffffff;
+    --border:#e2e4e9;
+    --text:#1f2430;
+    --muted:#6b7280;
+    --accent:#3b6ed8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background:var(--bg);
+    margin:0;
+    padding:24px;
+    color:var(--text);
+  }
+  h1{
+    font-size:20px;
+    font-weight:600;
+    margin:0 0 4px;
+  }
+  .sub{
+    color:var(--muted);
+    font-size:13px;
+    margin:0 0 20px;
+  }
+  .panel{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px 18px;
+    margin-bottom:20px;
+  }
+  .row{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  label{
+    font-size:12px;
+    color:var(--muted);
+    display:block;
+    margin-bottom:4px;
+  }
+  select, input[type=text]{
+    padding:8px 10px;
+    border:1px solid var(--border);
+    border-radius:6px;
+    font-size:14px;
+    background:#fff;
+    color:var(--text);
+  }
+  button{
+    padding:8px 16px;
+    border:none;
+    border-radius:6px;
+    background:var(--accent);
+    color:#fff;
+    font-size:14px;
+    cursor:pointer;
+    font-weight:500;
+  }
+  button:hover{ background:#2f59b0; }
+  button.secondary{
+    background:#fff;
+    color:var(--accent);
+    border:1px solid var(--accent);
+  }
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap:14px;
+  }
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px 16px;
+    position:relative;
+  }
+  .card .name{
+    font-weight:600;
+    font-size:15px;
+    margin-bottom:6px;
+  }
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:5px 10px;
+    border-radius:14px;
+    font-size:13px;
+    font-weight:500;
+  }
+  .dot{
+    width:8px;height:8px;border-radius:50%;
+    display:inline-block;
+  }
+  .time{
+    color:var(--muted);
+    font-size:11px;
+    margin-top:8px;
+  }
+  .empty{
+    color:var(--muted);
+    font-size:14px;
+    padding:20px;
+    text-align:center;
+  }
+
+  /* status colors */
+  .st-disponivel{ background:#e6f6ec; color:#1c7a3f; }
+  .st-disponivel .dot{ background:#1c7a3f; }
+  .st-banheiro{ background:#fdeee0; color:#b5621a; }
+  .st-banheiro .dot{ background:#b5621a; }
+  .st-ligacao{ background:#fde9ea; color:#c4324a; }
+  .st-ligacao .dot{ background:#c4324a; }
+  .st-almoco{ background:#fdf3da; color:#a3791a; }
+  .st-almoco .dot{ background:#a3791a; }
+  .st-reuniao{ background:#e9e9fb; color:#4a3fb5; }
+  .st-reuniao .dot{ background:#4a3fb5; }
+  .st-ausente{ background:#eceef1; color:#5b6270; }
+  .st-ausente .dot{ background:#5b6270; }
+  .st-pausa{ background:#e3f1fb; color:#1c6ca3; }
+  .st-pausa .dot{ background:#1c6ca3; }
+</style>
+</head>
+<body>
+
+<h1>Painel de status da equipe</h1>
+<p class="sub" id="who-line">Escolha seu nome e atualize seu status para a equipe ver.</p>
+
+<div class="panel">
+  <div class="row">
+    <div>
+      <label>Seu nome</label>
+      <input type="text" id="my-name" placeholder="Digite seu nome" list="known-names" style="min-width:160px;">
+      <datalist id="known-names"></datalist>
+    </div>
+    <div>
+      <label>Status</label>
+      <select id="my-status">
+        <option value="disponivel">Disponível</option>
+        <option value="banheiro">No banheiro</option>
+        <option value="ligacao">Em ligação</option>
+        <option value="reuniao">Em reunião</option>
+        <option value="almoco">Almoço</option>
+        <option value="pausa">Pausa rápida</option>
+        <option value="ausente">Ausente</option>
+      </select>
+    </div>
+    <div style="align-self:flex-end;">
+      <button id="update-btn">Atualizar meu status</button>
+    </div>
+  </div>
+</div>
+
+<div id="grid" class="grid">
+  <div class="empty">Carregando...</div>
+</div>
+
+<script>
+const STATUS_LABELS = {
+  disponivel: "Disponível",
+  banheiro: "No banheiro",
+  ligacao: "Em ligação",
+  reuniao: "Em reunião",
+  almoco: "Almoço",
+  pausa: "Pausa rápida",
+  ausente: "Ausente"
+};
+
+const LIST_KEY = "membros";
+
+function timeAgo(ts){
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if(diff < 60) return "agora mesmo";
+  if(diff < 3600) return Math.floor(diff/60) + " min atrás";
+  const h = Math.floor(diff/3600);
+  return h + "h atrás";
+}
+
+async function getMembers(){
+  try{
+    const r = await window.storage.get(LIST_KEY, true);
+    return r ? JSON.parse(r.value) : [];
+  }catch(e){
+    return [];
+  }
+}
+
+async function saveMembers(list){
+  try{
+    await window.storage.set(LIST_KEY, JSON.stringify(list), true);
+  }catch(e){ console.error(e); }
+}
+
+async function getStatus(name){
+  try{
+    const r = await window.storage.get("status:" + name, true);
+    return r ? JSON.parse(r.value) : null;
+  }catch(e){
+    return null;
+  }
+}
+
+async function setStatus(name, status){
+  const data = { status, ts: Date.now() };
+  await window.storage.set("status:" + name, JSON.stringify(data), true);
+  let members = await getMembers();
+  if(!members.includes(name)){
+    members.push(name);
+    await saveMembers(members);
+  }
+}
+
+async function renderGrid(){
+  const grid = document.getElementById("grid");
+  const members = await getMembers();
+  const datalist = document.getElementById("known-names");
+  datalist.innerHTML = members.map(m => `<option value="${m}"></option>`).join("");
+
+  if(members.length === 0){
+    grid.innerHTML = '<div class="empty">Nenhum status ainda. Seja a primeira pessoa a atualizar o seu!</div>';
+    return;
+  }
+
+  const cards = [];
+  for(const name of members){
+    const s = await getStatus(name);
+    const statusKey = s ? s.status : "ausente";
+    const label = STATUS_LABELS[statusKey] || "Ausente";
+    const ts = s ? timeAgo(s.ts) : "";
+    cards.push(`
+      <div class="card">
+        <div class="name">${name}</div>
+        <span class="badge st-${statusKey}"><span class="dot"></span>${label}</span>
+        <div class="time">${ts}</div>
+      </div>
+    `);
+  }
+  grid.innerHTML = cards.join("");
+}
+
+document.getElementById("update-btn").addEventListener("click", async () => {
+  const name = document.getElementById("my-name").value.trim();
+  const status = document.getElementById("my-status").value;
+  if(!name){
+    alert("Digite seu nome primeiro.");
+    return;
+  }
+  await setStatus(name, status);
+  document.getElementById("who-line").textContent = name + ", seu status foi atualizado para: " + STATUS_LABELS[status];
+  await renderGrid();
+});
+
+renderGrid();
+setInterval(renderGrid, 15000);
+</script>
+
+</body>
+</html>
